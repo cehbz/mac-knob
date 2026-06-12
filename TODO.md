@@ -1,17 +1,16 @@
 # TODO
 
-## spacekeeper — save/restore window→space mappings (goal 2)
+## spacekeeper
 
-- `save`: enumerate `SLSCopyManagedDisplaySpaces` + `SLSCopySpacesForWindows` + `CGWindowListCopyWindowInfo` → JSON of {space uuid, display UUID, Mission Control index, bundle ID, window title, frame}. Persist space UUIDs, not ManagedSpaceIDs.
-- `restore`: re-resolve uuid → current space ID; match windows by bundle ID + title + frame scoring (matcher as pure function, unit-tested); move via `SLSBridgedMoveWindowsToManagedSpaceOperation` (`performWithWMBridgeDelegate` via ObjC runtime, resolved dynamically, clear error if Apple closes it). Move first, focus after (op is async).
-- v1 scope cuts: no recreating missing spaces; skip fullscreen/tiled (type 4) windows.
-- Window titles need Screen Recording permission.
-- Reference code: y3owk1n/mimi `internal/native/space.m` (Go + cgo ObjC), ejbills/WindowKit `SkyLightSpace.swift`.
-- launchd login invocation only after manual save/restore proves reliable.
+- Run manually for a while; wire a launchd login invocation once it proves reliable.
+- Recreate missing spaces on restore (Dock AX automation, the flashy part — deferred from v1).
+- Consider restoring window frames as well as spaces.
 
-## spaceswitch hardening
+## spaceswitch hardening — durable signing (mechanism built, needs your secret)
 
-- Stable self-signed code-signing identity so rebuilds stop invalidating the Accessibility grant.
+- `op signin`, then `./scripts/gen-signing-cert.sh`, run the printed `op item create` to store the cert in 1Password, `rm` the local .p12.
+- `make install` (signs from 1Password via a throwaway keychain), then remove ALL stale `spaceswitch`/`spacekeeper` rows from the Accessibility list and grant once.
+- Reload the daemon: `launchctl kickstart -k gui/$UID/bz.ceh.spaceswitch`.
 - Uninstall Hammerspoon after the daemon has run clean for a few days.
 
 ## jog wheel hardware

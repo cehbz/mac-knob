@@ -3,28 +3,7 @@ package main
 /*
 #cgo LDFLAGS: -framework ApplicationServices -framework CoreFoundation
 #include <ApplicationServices/ApplicationServices.h>
-#include <dlfcn.h>
 #include <stdio.h>
-
-// Read-only SkyLight introspection. Resolved at runtime via dlopen so a
-// missing symbol degrades to "unknown" instead of a link failure.
-typedef int (*conn_fn)(void);
-typedef unsigned long long (*space_fn)(int);
-
-static unsigned long long active_space_id(void) {
-	static conn_fn main_conn = NULL;
-	static space_fn get_active = NULL;
-	if (!main_conn || !get_active) {
-		void *h = dlopen("/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight", RTLD_LAZY);
-		if (!h) return 0;
-		main_conn = (conn_fn)dlsym(h, "SLSMainConnectionID");
-		if (!main_conn) main_conn = (conn_fn)dlsym(h, "CGSMainConnectionID");
-		get_active = (space_fn)dlsym(h, "SLSGetActiveSpace");
-		if (!get_active) get_active = (space_fn)dlsym(h, "CGSGetActiveSpace");
-	}
-	if (!main_conn || !get_active) return 0;
-	return get_active(main_conn());
-}
 
 // Mission Control ignores synthetic shortcuts posted to the session tap from
 // a session-state source. Building the event from the HID system state and
@@ -108,10 +87,6 @@ static int run_daemon(int invert) {
 import "C"
 
 import "fmt"
-
-func activeSpaceID() uint64 {
-	return uint64(C.active_space_id())
-}
 
 func postCtrlArrow(right bool) error {
 	r := C.int(0)

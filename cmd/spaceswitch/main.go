@@ -5,7 +5,11 @@ import (
 	"fmt"
 	"os"
 	"time"
+
+	"github.com/cehbz/mac-knob/internal/skylight"
 )
+
+func activeSpaceID() uint64 { return skylight.ActiveSpaceID() }
 
 func usage() {
 	fmt.Fprint(os.Stderr, `usage: spaceswitch <command> [flags]
