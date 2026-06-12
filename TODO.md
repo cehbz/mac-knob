@@ -11,7 +11,6 @@
 - `op signin`, then `./scripts/gen-signing-cert.sh`, run the printed `op item create` to store the cert in 1Password, `rm` the local .p12.
 - `make install` (signs from 1Password via a throwaway keychain), then remove ALL stale `spaceswitch`/`spacekeeper` rows from the Accessibility list and grant once.
 - Reload the daemon: `launchctl kickstart -k gui/$UID/bz.ceh.spaceswitch`.
-- Uninstall Hammerspoon after the daemon has run clean for a few days.
 
 ## jog wheel hardware
 
