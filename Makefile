@@ -13,7 +13,11 @@ CODESIGN_IDENTITY ?= mac-knob
 PREFIX ?= $(HOME)/bin
 BINS := spaceswitch spacekeeper
 
-export CODESIGN_IDENTITY
+# Per-machine signing references (vault/item names) live in a gitignored
+# local file so the public Makefile stays generic. See README "Stable signing".
+-include signing.local.mk
+
+export CODESIGN_IDENTITY OP_P12_REF OP_P12PW_REF
 
 .PHONY: all build sign install test clean
 

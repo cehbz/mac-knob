@@ -69,7 +69,14 @@ One-time setup:
 3. `make install` — pulls the identity from 1Password into a temporary keychain, signs both binaries, installs to `~/bin`. Falls back to ad-hoc with a warning if the secret or `op` is unavailable.
 4. Remove any existing `spaceswitch`/`spacekeeper` entries from the Accessibility list, then grant once. Future rebuilds keep the grant.
 
-Overrides: `CODESIGN_IDENTITY` (certificate CN, default `mac-knob`), `OP_P12_REF` / `OP_P12PW_REF` (the `op://` secret references).
+Overrides: `CODESIGN_IDENTITY` (certificate CN, default `mac-knob`), `OP_P12_REF` / `OP_P12PW_REF` (the `op://` secret references). Per-machine references can go in a gitignored `signing.local.mk` that the Makefile includes, e.g.:
+
+```make
+OP_P12_REF   = op://Shared/mac-knob signing/p12
+OP_P12PW_REF = op://Shared/mac-knob signing/p12password
+```
+
+Changing a binary's signature (ad-hoc → cert, or a new cert) changes its Designated Requirement, so the existing Accessibility grant stops matching and you must remove the stale row and grant once more. After that, rebuilds signed with the same cert keep the grant.
 
 ### Caveats
 
