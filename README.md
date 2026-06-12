@@ -95,6 +95,7 @@ spacekeeper save              snapshot to ~/.config/spacekeeper/layout.json
 spacekeeper restore [-n]      move windows back to their spaces; -n prints the plan
 spacekeeper restore -frames   also restore each window's position and size
 spacekeeper restore -create=false   skip recreating missing desktops
+spacekeeper restore -fullscreen   also re-fullscreen windows that were fullscreen
 spacekeeper show              print the saved layout
 ```
 
@@ -108,7 +109,9 @@ Spaces are identified by UUID, with a (display, position) fallback when a UUID i
 
 If a display has fewer desktops than the saved layout (e.g. after a display was disconnected and reconnected), restore recreates the missing ones before moving windows. This is the one operation that drives Mission Control — it animates in and out, unavoidably, because there is no non-flashy, no-SIP way to create a Dock-managed space. It runs only when desktops are actually missing; disable with `-create=false`. Recreated desktops get new UUIDs, so windows resolve to them by display position.
 
-Limitations, by design: fullscreen and all-spaces (sticky) windows are skipped, and recreating a desktop on a display that is entirely gone is not possible (those windows are reported instead).
+Fullscreen windows are recorded at save time and, with `-fullscreen`, restored by toggling each window's `AXFullScreen` (which recreates its dedicated space). Caveats: it works only for apps that expose a settable `AXFullScreen` (most do); macOS places the recreated fullscreen space by creation order, not at a precise slot; and the window is fullscreened on whatever display it is currently on. Run after windows have reopened. Without `-fullscreen`, such windows are matched but left alone and reported.
+
+Limitations, by design: all-spaces (sticky) windows and Split View pairs are not reconstructed (a Split View window becomes a solo fullscreen at best), and recreating a desktop on a display that is entirely gone is not possible (those windows are reported instead).
 
 ## Research
 

@@ -26,7 +26,13 @@ type SavedWindow struct {
 	OwnerName string `json:"ownerName"`
 	Title     string `json:"title,omitempty"`
 	Frame     Rect   `json:"frame"`
-	SpaceUUID string `json:"spaceUUID"`
+	// SpaceUUID is the user desktop the window was on. Empty for a fullscreen
+	// window, which has no user space.
+	SpaceUUID string `json:"spaceUUID,omitempty"`
+	// Fullscreen records that the window occupied its own fullscreen (type 4)
+	// space; DisplayUUID is the display that space was on.
+	Fullscreen  bool   `json:"fullscreen,omitempty"`
+	DisplayUUID string `json:"displayUUID,omitempty"`
 }
 
 type Layout struct {

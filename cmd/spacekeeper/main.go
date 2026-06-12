@@ -31,6 +31,7 @@ flags (after the command):
   -n        restore: dry run, print planned moves without moving
   -frames   restore: also restore each window's position and size (needs Accessibility)
   -create   restore: recreate missing desktops via Mission Control, default on (set -create=false to skip)
+  -fullscreen  restore: re-fullscreen windows that were fullscreen when saved
 `)
 	os.Exit(2)
 }
@@ -45,6 +46,7 @@ func main() {
 	dryRun := fs.Bool("n", false, "dry run")
 	frames := fs.Bool("frames", false, "also restore window position/size, not just space")
 	create := fs.Bool("create", true, "recreate missing spaces via Mission Control (flashy)")
+	fullscreen := fs.Bool("fullscreen", false, "re-fullscreen windows that were fullscreen at save time")
 	fs.Parse(os.Args[2:])
 
 	var err error
@@ -52,7 +54,7 @@ func main() {
 	case "save":
 		err = save(*file)
 	case "restore":
-		err = restore(*file, *dryRun, *frames, *create)
+		err = restore(*file, *dryRun, *frames, *create, *fullscreen)
 	case "show":
 		err = show(*file)
 	default:
@@ -89,6 +91,10 @@ type snapshot struct {
 	windows  []layout.LiveWindow
 	winSpace map[uint32]uint64 // window ID -> current space ID
 	idToKey  map[uint64]string // space ID -> spaceKey
+	// fsSpace maps a fullscreen/tiled (type 4) space ID to its display UUID;
+	// fsWindow maps a window living in one to that display UUID.
+	fsSpace  map[uint64]string
+	fsWindow map[uint32]string
 }
 
 func gather() (*snapshot, error) {
@@ -99,19 +105,22 @@ func gather() (*snapshot, error) {
 	s := &snapshot{
 		winSpace: make(map[uint32]uint64),
 		idToKey:  make(map[uint64]string),
+		fsSpace:  make(map[uint64]string),
+		fsWindow: make(map[uint32]string),
 	}
 	for _, d := range displays {
 		cur := layout.CurrentDisplay{UUID: d.UUID}
 		idx := 0
 		for _, sp := range d.Spaces {
-			if !sp.UserSpace() {
-				continue
+			if sp.UserSpace() {
+				key := spaceKey(sp.UUID, d.UUID, idx)
+				s.spaces = append(s.spaces, layout.SavedSpace{UUID: key, DisplayUUID: d.UUID, Index: idx})
+				cur.Spaces = append(cur.Spaces, layout.CurrentSpace{ID: sp.ID(), UUID: sp.UUID})
+				s.idToKey[sp.ID()] = key
+				idx++
+			} else if sp.Type == 4 {
+				s.fsSpace[sp.ID()] = d.UUID
 			}
-			key := spaceKey(sp.UUID, d.UUID, idx)
-			s.spaces = append(s.spaces, layout.SavedSpace{UUID: key, DisplayUUID: d.UUID, Index: idx})
-			cur.Spaces = append(cur.Spaces, layout.CurrentSpace{ID: sp.ID(), UUID: sp.UUID})
-			s.idToKey[sp.ID()] = key
-			idx++
 		}
 		s.displays = append(s.displays, cur)
 	}
@@ -130,14 +139,23 @@ func gather() (*snapshot, error) {
 			continue
 		}
 		var userSpaces []uint64
+		var fsDisplay string
 		for _, id := range ids {
 			if _, ok := s.idToKey[id]; ok {
 				userSpaces = append(userSpaces, id)
+			} else if disp, ok := s.fsSpace[id]; ok {
+				fsDisplay = disp
 			}
 		}
-		// Sticky windows (several spaces) and fullscreen windows (zero
-		// user spaces) have no single home; skip them.
-		if len(userSpaces) != 1 {
+		// Keep windows with a single home: one user desktop, or one
+		// fullscreen/tiled space. Sticky windows (several user spaces) are
+		// skipped.
+		switch {
+		case len(userSpaces) == 1:
+			s.winSpace[w.Number] = userSpaces[0]
+		case len(userSpaces) == 0 && fsDisplay != "":
+			s.fsWindow[w.Number] = fsDisplay
+		default:
 			continue
 		}
 		if w.Name != "" {
@@ -151,7 +169,6 @@ func gather() (*snapshot, error) {
 			Title:     w.Name,
 			Frame:     layout.Rect{X: w.Bounds.X, Y: w.Bounds.Y, W: w.Bounds.Width, H: w.Bounds.Height},
 		})
-		s.winSpace[w.Number] = userSpaces[0]
 	}
 	if len(s.windows) > 0 && !sawTitle {
 		fmt.Fprintln(os.Stderr, "warning: no window titles visible — grant Screen Recording for reliable matching (System Settings > Privacy & Security > Screen Recording)")
@@ -167,13 +184,19 @@ func save(file string) error {
 	l := layout.Layout{SavedAt: time.Now()}
 	l.Spaces = s.spaces
 	for _, w := range s.windows {
-		l.Windows = append(l.Windows, layout.SavedWindow{
+		sw := layout.SavedWindow{
 			BundleID:  w.BundleID,
 			OwnerName: w.OwnerName,
 			Title:     w.Title,
 			Frame:     w.Frame,
-			SpaceUUID: s.idToKey[s.winSpace[w.ID]],
-		})
+		}
+		if disp, ok := s.fsWindow[w.ID]; ok {
+			sw.Fullscreen = true
+			sw.DisplayUUID = disp
+		} else {
+			sw.SpaceUUID = s.idToKey[s.winSpace[w.ID]]
+		}
+		l.Windows = append(l.Windows, sw)
 	}
 	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
 		return err
@@ -189,7 +212,7 @@ func save(file string) error {
 	return nil
 }
 
-func restore(file string, dryRun, frames, create bool) error {
+func restore(file string, dryRun, frames, create, fullscreen bool) error {
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return err
@@ -239,6 +262,9 @@ func restore(file string, dryRun, frames, create bool) error {
 	moves := make(map[uint64][]uint32) // target space ID -> window IDs
 	skipped, unresolved := 0, 0
 	for si, wid := range matched {
+		if l.Windows[si].Fullscreen {
+			continue // handled by the fullscreen pass, not a space move
+		}
 		target, ok := resolved[l.Windows[si].SpaceUUID]
 		if !ok {
 			unresolved++
@@ -281,12 +307,44 @@ func restore(file string, dryRun, frames, create bool) error {
 	framed, frameErr := 0, 0
 	if frames && !dryRun {
 		for si, wid := range matched {
+			if l.Windows[si].Fullscreen {
+				continue // these get fullscreened, not framed
+			}
 			f := l.Windows[si].Frame
 			if err := skylight.SetWindowFrame(pidByWindow[wid], wid, f.X, f.Y, f.W, f.H); err != nil {
 				frameErr++
 				continue
 			}
 			framed++
+		}
+	}
+
+	// Re-fullscreen windows that were fullscreen at save time. Each transition
+	// creates a fullscreen space and animates, so this runs last.
+	fsDone, fsSkip, fsFail := 0, 0, 0
+	wantFS := 0
+	for si := range matched {
+		if l.Windows[si].Fullscreen {
+			wantFS++
+		}
+	}
+	if fullscreen && wantFS > 0 {
+		if dryRun {
+			fmt.Printf("would restore %d fullscreen window(s)\n", wantFS)
+		} else {
+			for si, wid := range matched {
+				if !l.Windows[si].Fullscreen {
+					continue
+				}
+				switch skylight.SetFullscreen(pidByWindow[wid], wid, true) {
+				case skylight.FullscreenChanged:
+					fsDone++
+				case skylight.FullscreenAlready:
+					fsSkip++
+				default:
+					fsFail++
+				}
+			}
 		}
 	}
 
@@ -300,6 +358,11 @@ func restore(file string, dryRun, frames, create bool) error {
 		if frameErr > 0 {
 			fmt.Printf(" (%d failed — apps that refuse AX resize, or Accessibility not granted)", frameErr)
 		}
+	}
+	if fullscreen && !dryRun && wantFS > 0 {
+		fmt.Printf("; fullscreened %d (%d already, %d unsupported/failed)", fsDone, fsSkip, fsFail)
+	} else if !fullscreen && wantFS > 0 {
+		fmt.Printf("; %d fullscreen window(s) skipped (use -fullscreen)", wantFS)
 	}
 	fmt.Println()
 	if moveCount > 0 && verified < moveCount {

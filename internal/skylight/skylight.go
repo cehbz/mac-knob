@@ -88,6 +88,7 @@ int sk_move_windows_to_space(const uint32_t *wids, int count, unsigned long long
 char *sk_bundle_id_for_pid(int pid);
 // Implemented in ax.m.
 int sk_set_window_frame(int pid, uint32_t wid, double x, double y, double w, double h);
+int sk_set_fullscreen(int pid, uint32_t wid, int on);
 // Implemented in spacecreate.m.
 int sk_add_spaces(const int *counts, int n, int *added);
 */
@@ -256,6 +257,28 @@ func SetWindowFrame(pid int, wid uint32, x, y, w, h float64) error {
 	default:
 		return fmt.Errorf("set-frame failed (rc=%d)", int(rc))
 	}
+}
+
+// FullscreenResult reports the outcome of a SetFullscreen call.
+type FullscreenResult int
+
+const (
+	FullscreenChanged      FullscreenResult = iota // transitioned into the requested state
+	FullscreenNotPermitted                         // AX not granted, or app has no windows
+	FullscreenWindowGone                           // window not found in the app
+	FullscreenUnsupported                          // app exposes no settable AXFullScreen
+	FullscreenAlready                              // already in the requested state
+)
+
+// SetFullscreen toggles native fullscreen on a window via AXFullScreen. Going
+// fullscreen creates a dedicated space; this is how fullscreen windows are
+// restored. Requires the process to be AX-trusted.
+func SetFullscreen(pid int, wid uint32, on bool) FullscreenResult {
+	v := 0
+	if on {
+		v = 1
+	}
+	return FullscreenResult(C.sk_set_fullscreen(C.int(pid), C.uint32_t(wid), C.int(v)))
 }
 
 // MoveWindowsToSpace moves windows to a space via
