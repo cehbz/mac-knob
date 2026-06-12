@@ -94,6 +94,7 @@ go build -o spacekeeper ./cmd/spacekeeper
 spacekeeper save              snapshot to ~/.config/spacekeeper/layout.json
 spacekeeper restore [-n]      move windows back to their spaces; -n prints the plan
 spacekeeper restore -frames   also restore each window's position and size
+spacekeeper restore -create=false   skip recreating missing desktops
 spacekeeper show              print the saved layout
 ```
 
@@ -105,7 +106,9 @@ The read side is SkyLight introspection (`SLSCopyManagedDisplaySpaces`, `SLSCopy
 
 Spaces are identified by UUID, with a (display, position) fallback when a UUID is gone. Window IDs do not survive reboots, so windows are re-matched by app, then title, then frame proximity. Grant Screen Recording to make titles visible; without it matching uses app and frame only.
 
-Limitations, by design for now: spaces are not recreated (restore into your existing set), and fullscreen windows and all-spaces (sticky) windows are skipped.
+If a display has fewer desktops than the saved layout (e.g. after a display was disconnected and reconnected), restore recreates the missing ones before moving windows. This is the one operation that drives Mission Control — it animates in and out, unavoidably, because there is no non-flashy, no-SIP way to create a Dock-managed space. It runs only when desktops are actually missing; disable with `-create=false`. Recreated desktops get new UUIDs, so windows resolve to them by display position.
+
+Limitations, by design: fullscreen and all-spaces (sticky) windows are skipped, and recreating a desktop on a display that is entirely gone is not possible (those windows are reported instead).
 
 ## Research
 

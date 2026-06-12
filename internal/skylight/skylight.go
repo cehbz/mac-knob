@@ -88,6 +88,8 @@ int sk_move_windows_to_space(const uint32_t *wids, int count, unsigned long long
 char *sk_bundle_id_for_pid(int pid);
 // Implemented in ax.m.
 int sk_set_window_frame(int pid, uint32_t wid, double x, double y, double w, double h);
+// Implemented in spacecreate.m.
+int sk_add_spaces(const int *counts, int n, int *added);
 */
 import "C"
 
@@ -199,6 +201,42 @@ func BundleIDForPID(pid int) string {
 	}
 	defer C.free(unsafe.Pointer(cs))
 	return C.GoString(cs)
+}
+
+// AddSpaces creates desktops by driving Mission Control's accessibility tree:
+// counts[i] desktops are added to the i-th display (display order matches
+// ManagedDisplaySpaces). This animates Mission Control in and out — it is the
+// only no-SIP way to create a Dock-managed space. Returns the number of
+// desktops actually added alongside any error.
+func AddSpaces(counts []int) (int, error) {
+	total := 0
+	for _, c := range counts {
+		if c > 0 {
+			total += c
+		}
+	}
+	if total == 0 {
+		return 0, nil
+	}
+	c := make([]C.int, len(counts))
+	for i, v := range counts {
+		if v < 0 {
+			v = 0
+		}
+		c[i] = C.int(v)
+	}
+	var added C.int
+	rc := C.sk_add_spaces(&c[0], C.int(len(counts)), &added)
+	switch rc {
+	case 0:
+		return int(added), nil
+	case 1:
+		return int(added), errors.New("could not reach Mission Control (Accessibility not granted, or no Dock)")
+	case 2:
+		return int(added), errors.New("a display's add-desktop button was not found (Mission Control AX tree changed?)")
+	default:
+		return int(added), fmt.Errorf("add-spaces failed (rc=%d)", int(rc))
+	}
 }
 
 // SetWindowFrame moves and resizes a window via the Accessibility API

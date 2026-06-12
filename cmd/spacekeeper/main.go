@@ -30,6 +30,7 @@ flags (after the command):
   -f path   layout file (default ~/.config/spacekeeper/layout.json)
   -n        restore: dry run, print planned moves without moving
   -frames   restore: also restore each window's position and size (needs Accessibility)
+  -create   restore: recreate missing desktops via Mission Control, default on (set -create=false to skip)
 `)
 	os.Exit(2)
 }
@@ -43,6 +44,7 @@ func main() {
 	file := fs.String("f", defaultLayoutPath(), "layout file")
 	dryRun := fs.Bool("n", false, "dry run")
 	frames := fs.Bool("frames", false, "also restore window position/size, not just space")
+	create := fs.Bool("create", true, "recreate missing spaces via Mission Control (flashy)")
 	fs.Parse(os.Args[2:])
 
 	var err error
@@ -50,7 +52,7 @@ func main() {
 	case "save":
 		err = save(*file)
 	case "restore":
-		err = restore(*file, *dryRun, *frames)
+		err = restore(*file, *dryRun, *frames, *create)
 	case "show":
 		err = show(*file)
 	default:
@@ -187,7 +189,7 @@ func save(file string) error {
 	return nil
 }
 
-func restore(file string, dryRun, frames bool) error {
+func restore(file string, dryRun, frames, create bool) error {
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return err
@@ -201,6 +203,31 @@ func restore(file string, dryRun, frames bool) error {
 	if err != nil {
 		return err
 	}
+
+	// Recreate missing spaces first, so windows have somewhere to land.
+	if create {
+		deficits := layout.SpaceDeficits(l.Spaces, s.displays)
+		want := 0
+		for _, d := range deficits {
+			want += d
+		}
+		if want > 0 {
+			if dryRun {
+				fmt.Printf("would create %d missing desktop(s) via Mission Control\n", want)
+			} else {
+				fmt.Printf("creating %d missing desktop(s) via Mission Control...\n", want)
+				added, err := skylight.AddSpaces(deficits)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "warning: space creation incomplete (%d/%d): %v\n", added, want, err)
+				}
+				// Re-read state so the new spaces are resolvable by index.
+				if s, err = gather(); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
 	resolved := layout.ResolveSpaces(l.Spaces, s.displays)
 	matched := layout.Match(l.Windows, s.windows)
 

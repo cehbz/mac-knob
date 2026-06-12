@@ -3,8 +3,7 @@
 ## spacekeeper
 
 - Run the opt-in login agent for a while (`make restore-agent-install`); promote to default / tune the settle delay once it proves reliable.
-
-(Recreating missing spaces on restore is not pursued: the only no-SIP path is flashy Dock/Mission-Control AX automation, which is rejected. Restore reports windows whose space is gone instead.)
+- Multi-display space creation assumes SLS display order matches the Mission Control AX `mc.display` order. Held on this 2-display setup; revisit if it ever creates desktops on the wrong display.
 
 ## jog wheel hardware
 

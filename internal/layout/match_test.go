@@ -120,6 +120,35 @@ func TestResolveSpacesFallbackToIndex(t *testing.T) {
 	}
 }
 
+func TestSpaceDeficits(t *testing.T) {
+	saved := []SavedSpace{
+		{UUID: "a", DisplayUUID: "D1", Index: 0},
+		{UUID: "b", DisplayUUID: "D1", Index: 1},
+		{UUID: "c", DisplayUUID: "D1", Index: 2},
+		{UUID: "d", DisplayUUID: "D2", Index: 0},
+		{UUID: "e", DisplayUUID: "GONE", Index: 0}, // display no longer present
+	}
+	displays := []CurrentDisplay{
+		{UUID: "D1", Spaces: []CurrentSpace{{ID: 1, UUID: "a"}}}, // had 3, has 1 -> deficit 2
+		{UUID: "D2", Spaces: []CurrentSpace{{ID: 9, UUID: "d"}}}, // had 1, has 1 -> 0
+	}
+	got := SpaceDeficits(saved, displays)
+	if len(got) != 2 || got[0] != 2 || got[1] != 0 {
+		t.Fatalf("want [2 0], got %v", got)
+	}
+}
+
+func TestSpaceDeficitsNoSurplusNegative(t *testing.T) {
+	// Display has more spaces than saved -> deficit clamped to 0, never negative.
+	saved := []SavedSpace{{UUID: "a", DisplayUUID: "D1", Index: 0}}
+	displays := []CurrentDisplay{
+		{UUID: "D1", Spaces: []CurrentSpace{{ID: 1, UUID: "a"}, {ID: 2, UUID: "b"}}},
+	}
+	if got := SpaceDeficits(saved, displays); got[0] != 0 {
+		t.Fatalf("want [0], got %v", got)
+	}
+}
+
 func TestResolveSpacesMissingDisplayOrIndexSkipped(t *testing.T) {
 	saved := []SavedSpace{
 		{UUID: "GONE1", DisplayUUID: "DX", Index: 0}, // display gone

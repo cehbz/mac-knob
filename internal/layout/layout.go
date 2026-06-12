@@ -115,6 +115,25 @@ func matchScore(s SavedWindow, l LiveWindow) float64 {
 	return score
 }
 
+// SpaceDeficits returns, per current display (in the given order), how many
+// user spaces the saved layout had beyond what the display has now. Entry i
+// aligns with displays[i]; it is 0 when the display has enough (or more)
+// spaces, or when the saved layout never referenced that display. Saved
+// displays that are no longer present cannot be recreated and are ignored.
+func SpaceDeficits(saved []SavedSpace, displays []CurrentDisplay) []int {
+	savedPerDisplay := make(map[string]int)
+	for _, s := range saved {
+		savedPerDisplay[s.DisplayUUID]++
+	}
+	out := make([]int, len(displays))
+	for i, d := range displays {
+		if deficit := savedPerDisplay[d.UUID] - len(d.Spaces); deficit > 0 {
+			out[i] = deficit
+		}
+	}
+	return out
+}
+
 // ResolveSpaces maps each saved space UUID to a current space ID. A space
 // whose UUID is gone resolves by (display UUID, index); a saved space whose
 // display is gone or whose index is out of range gets no entry.
