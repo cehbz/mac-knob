@@ -92,9 +92,14 @@ Saves window-to-space assignments and moves windows back later, after a reboot o
 go build -o spacekeeper ./cmd/spacekeeper
 
 spacekeeper save              snapshot to ~/.config/spacekeeper/layout.json
-spacekeeper restore [-n]      move windows back; -n prints the plan without moving
+spacekeeper restore [-n]      move windows back to their spaces; -n prints the plan
+spacekeeper restore -frames   also restore each window's position and size
 spacekeeper show              print the saved layout
 ```
+
+`-frames` repositions and resizes via the Accessibility API. It only affects windows on the **currently active space** — macOS won't let AX resize a window that lives on another space, so frame restore is partial unless you run it per-space. Space assignment (the default) has no such limit. Grant the running process Accessibility for `-frames` to do anything.
+
+Restore at login is available as an opt-in agent (`make restore-agent-install` / `restore-agent-uninstall`); it waits a settle period for apps to reopen their windows, then restores space assignments. See `dist/bz.ceh.spacekeeper-restore.plist`.
 
 The read side is SkyLight introspection (`SLSCopyManagedDisplaySpaces`, `SLSCopySpacesForWindows`), callable from any process. The write side is `SLSBridgedMoveWindowsToManagedSpaceOperation`, the bridged operation that works with SIP enabled since macOS 26.4. It is private and may vanish in any update; spacekeeper resolves it at runtime and reports clearly when it is unavailable. Verified working on macOS 26.5.
 

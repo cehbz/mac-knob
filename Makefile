@@ -19,7 +19,7 @@ BINS := spaceswitch spacekeeper
 
 export CODESIGN_IDENTITY OP_P12_REF OP_P12PW_REF
 
-.PHONY: all build sign install test clean
+.PHONY: all build sign install test clean restore-agent-install restore-agent-uninstall
 
 all: install
 
@@ -37,6 +37,19 @@ install: sign
 
 test:
 	go test ./...
+
+# Optional login agent that runs `spacekeeper restore` after a settle delay.
+RESTORE_AGENT := bz.ceh.spacekeeper-restore
+restore-agent-install:
+	cp dist/$(RESTORE_AGENT).plist $(HOME)/Library/LaunchAgents/$(RESTORE_AGENT).plist
+	launchctl bootout gui/$$(id -u)/$(RESTORE_AGENT) 2>/dev/null || true
+	launchctl bootstrap gui/$$(id -u) $(HOME)/Library/LaunchAgents/$(RESTORE_AGENT).plist
+	@echo "login restore enabled"
+
+restore-agent-uninstall:
+	launchctl bootout gui/$$(id -u)/$(RESTORE_AGENT) 2>/dev/null || true
+	rm -f $(HOME)/Library/LaunchAgents/$(RESTORE_AGENT).plist
+	@echo "login restore disabled"
 
 clean:
 	rm -f $(BINS)

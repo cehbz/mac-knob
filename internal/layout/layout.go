@@ -39,6 +39,7 @@ type Layout struct {
 // so live IDs never appear in a Layout).
 type LiveWindow struct {
 	ID        uint32
+	OwnerPID  int
 	BundleID  string
 	OwnerName string
 	Title     string

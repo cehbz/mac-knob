@@ -6,7 +6,7 @@ package skylight
 
 /*
 #cgo CFLAGS: -x objective-c
-#cgo LDFLAGS: -framework Foundation -framework AppKit -framework CoreGraphics -framework CoreFoundation
+#cgo LDFLAGS: -framework Foundation -framework AppKit -framework CoreGraphics -framework CoreFoundation -framework ApplicationServices
 #include <CoreFoundation/CoreFoundation.h>
 #include <CoreGraphics/CoreGraphics.h>
 #include <dlfcn.h>
@@ -86,6 +86,8 @@ static CFDataRef sk_window_list(void) {
 // Implemented in move.m.
 int sk_move_windows_to_space(const uint32_t *wids, int count, unsigned long long sid);
 char *sk_bundle_id_for_pid(int pid);
+// Implemented in ax.m.
+int sk_set_window_frame(int pid, uint32_t wid, double x, double y, double w, double h);
 */
 import "C"
 
@@ -197,6 +199,25 @@ func BundleIDForPID(pid int) string {
 	}
 	defer C.free(unsafe.Pointer(cs))
 	return C.GoString(cs)
+}
+
+// SetWindowFrame moves and resizes a window via the Accessibility API
+// (CGWindow bounds are read-only). Requires the process to be AX-trusted.
+func SetWindowFrame(pid int, wid uint32, x, y, w, h float64) error {
+	rc := C.sk_set_window_frame(C.int(pid), C.uint32_t(wid),
+		C.double(x), C.double(y), C.double(w), C.double(h))
+	switch rc {
+	case 0:
+		return nil
+	case 1:
+		return errors.New("Accessibility not permitted or app has no AX windows")
+	case 2:
+		return errors.New("window not found in its app's AX window list")
+	case 3:
+		return errors.New("app refused the position/size change")
+	default:
+		return fmt.Errorf("set-frame failed (rc=%d)", int(rc))
+	}
 }
 
 // MoveWindowsToSpace moves windows to a space via

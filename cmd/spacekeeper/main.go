@@ -29,6 +29,7 @@ commands:
 flags (after the command):
   -f path   layout file (default ~/.config/spacekeeper/layout.json)
   -n        restore: dry run, print planned moves without moving
+  -frames   restore: also restore each window's position and size (needs Accessibility)
 `)
 	os.Exit(2)
 }
@@ -41,6 +42,7 @@ func main() {
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	file := fs.String("f", defaultLayoutPath(), "layout file")
 	dryRun := fs.Bool("n", false, "dry run")
+	frames := fs.Bool("frames", false, "also restore window position/size, not just space")
 	fs.Parse(os.Args[2:])
 
 	var err error
@@ -48,7 +50,7 @@ func main() {
 	case "save":
 		err = save(*file)
 	case "restore":
-		err = restore(*file, *dryRun)
+		err = restore(*file, *dryRun, *frames)
 	case "show":
 		err = show(*file)
 	default:
@@ -141,6 +143,7 @@ func gather() (*snapshot, error) {
 		}
 		s.windows = append(s.windows, layout.LiveWindow{
 			ID:        w.Number,
+			OwnerPID:  w.OwnerPID,
 			BundleID:  skylight.BundleIDForPID(w.OwnerPID),
 			OwnerName: w.OwnerName,
 			Title:     w.Name,
@@ -184,7 +187,7 @@ func save(file string) error {
 	return nil
 }
 
-func restore(file string, dryRun bool) error {
+func restore(file string, dryRun, frames bool) error {
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return err
@@ -200,6 +203,11 @@ func restore(file string, dryRun bool) error {
 	}
 	resolved := layout.ResolveSpaces(l.Spaces, s.displays)
 	matched := layout.Match(l.Windows, s.windows)
+
+	pidByWindow := make(map[uint32]int, len(s.windows))
+	for _, w := range s.windows {
+		pidByWindow[w.ID] = w.OwnerPID
+	}
 
 	moves := make(map[uint64][]uint32) // target space ID -> window IDs
 	skipped, unresolved := 0, 0
@@ -243,10 +251,28 @@ func restore(file string, dryRun bool) error {
 		}
 	}
 
+	framed, frameErr := 0, 0
+	if frames && !dryRun {
+		for si, wid := range matched {
+			f := l.Windows[si].Frame
+			if err := skylight.SetWindowFrame(pidByWindow[wid], wid, f.X, f.Y, f.W, f.H); err != nil {
+				frameErr++
+				continue
+			}
+			framed++
+		}
+	}
+
 	fmt.Printf("matched %d/%d saved windows; moved %d (%d verified), %d already in place",
 		len(matched), len(l.Windows), moveCount, verified, skipped)
 	if unresolved > 0 {
 		fmt.Printf(", %d on spaces that no longer exist", unresolved)
+	}
+	if frames && !dryRun {
+		fmt.Printf("; restored %d frames", framed)
+		if frameErr > 0 {
+			fmt.Printf(" (%d failed — apps that refuse AX resize, or Accessibility not granted)", frameErr)
+		}
 	}
 	fmt.Println()
 	if moveCount > 0 && verified < moveCount {

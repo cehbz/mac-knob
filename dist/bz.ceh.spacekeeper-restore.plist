@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Optional: restore window-to-space assignments at login.
+
+  Apps reopen their windows asynchronously after login, so the restore waits a
+  settle period first; windows that have not reappeared yet will not match.
+  Adjust the sleep to taste. Frame restore is intentionally omitted here
+  because AX can only resize windows on the active space.
+
+  Install/remove via `make restore-agent-install` / `make restore-agent-uninstall`.
+-->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>bz.ceh.spacekeeper-restore</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/sh</string>
+		<string>-c</string>
+		<string>sleep 25; exec "$HOME/bin/spacekeeper" restore</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>/tmp/spacekeeper-restore.log</string>
+	<key>StandardOutPath</key>
+	<string>/tmp/spacekeeper-restore.log</string>
+</dict>
+</plist>

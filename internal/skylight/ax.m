@@ -1,0 +1,48 @@
+#import <Foundation/Foundation.h>
+#import <ApplicationServices/ApplicationServices.h>
+
+// Private: maps an AX element to its CGWindowID. Same symbol AeroSpace and
+// others rely on; there is no public AXUIElement <-> CGWindowID bridge.
+extern AXError _AXUIElementGetWindow(AXUIElementRef element, CGWindowID *outID);
+
+// Move/resize the window with the given CGWindowID to the frame. The window is
+// found by walking the owning app's AX windows and matching CGWindowID, since
+// frames can only be set through the Accessibility API (CGWindow bounds are
+// read-only). Returns 0 on success, 1 if AX is not permitted / app has no
+// windows, 2 if the window id was not found, 3 if setting an attribute failed.
+int sk_set_window_frame(int pid, uint32_t wid, double x, double y, double w, double h) {
+	AXUIElementRef app = AXUIElementCreateApplication((pid_t)pid);
+	if (!app) return 1;
+
+	CFArrayRef windows = NULL;
+	AXError err = AXUIElementCopyAttributeValue(app, kAXWindowsAttribute, (CFTypeRef *)&windows);
+	if (err != kAXErrorSuccess || !windows) {
+		CFRelease(app);
+		return 1;
+	}
+
+	int rc = 2;
+	CFIndex n = CFArrayGetCount(windows);
+	for (CFIndex i = 0; i < n; i++) {
+		AXUIElementRef win = (AXUIElementRef)CFArrayGetValueAtIndex(windows, i);
+		CGWindowID got = 0;
+		if (_AXUIElementGetWindow(win, &got) != kAXErrorSuccess || got != wid) continue;
+
+		CGPoint pos = CGPointMake(x, y);
+		CGSize size = CGSizeMake(w, h);
+		AXValueRef posVal = AXValueCreate(kAXValueCGPointType, &pos);
+		AXValueRef sizeVal = AXValueCreate(kAXValueCGSizeType, &size);
+		// Set size first, then position: some apps clamp position against the
+		// old size otherwise.
+		AXError e1 = AXUIElementSetAttributeValue(win, kAXSizeAttribute, sizeVal);
+		AXError e2 = AXUIElementSetAttributeValue(win, kAXPositionAttribute, posVal);
+		CFRelease(posVal);
+		CFRelease(sizeVal);
+		rc = (e1 == kAXErrorSuccess && e2 == kAXErrorSuccess) ? 0 : 3;
+		break;
+	}
+
+	CFRelease(windows);
+	CFRelease(app);
+	return rc;
+}
