@@ -1,6 +1,5 @@
 /spaceswitch
 /spacekeeper
-jog-wheel-session.md
 .DS_Store
 # signing secrets / local config — never commit
 *.p12

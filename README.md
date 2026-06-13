@@ -1,6 +1,6 @@
-# mac-knob
+# spacekit
 
-Tools for driving macOS Spaces from a mouse, plus notes toward a DIY jog wheel for video editing.
+A macOS Spaces (Mission Control) toolkit: switch spaces from a mouse tilt wheel, and save/restore window-to-space layouts. SIP stays enabled.
 
 ## spaceswitch
 
@@ -72,8 +72,8 @@ One-time setup:
 Overrides: `CODESIGN_IDENTITY` (certificate CN, default `mac-knob`), `OP_P12_REF` / `OP_P12PW_REF` (the `op://` secret references). Per-machine references can go in a gitignored `signing.local.mk` that the Makefile includes, e.g.:
 
 ```make
-OP_P12_REF   = op://Shared/mac-knob signing/p12
-OP_P12PW_REF = op://Shared/mac-knob signing/p12password
+OP_P12_REF   = op://Private/spacekit signing/p12
+OP_P12PW_REF = op://Private/spacekit signing/p12password
 ```
 
 Changing a binary's signature (ad-hoc → cert, or a new cert) changes its Designated Requirement, so the existing Accessibility grant stops matching and you must remove the stale row and grant once more. After that, rebuilds signed with the same cert keep the grant.

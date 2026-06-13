@@ -1,4 +1,4 @@
-module github.com/cehbz/mac-knob
+module github.com/cehbz/spacekit
 
 go 1.26
 

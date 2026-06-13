@@ -17,8 +17,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cehbz/mac-knob/internal/layout"
-	"github.com/cehbz/mac-knob/internal/skylight"
+	"github.com/cehbz/spacekit/internal/layout"
+	"github.com/cehbz/spacekit/internal/skylight"
 )
 
 func usage() {

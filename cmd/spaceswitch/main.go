@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/cehbz/mac-knob/internal/skylight"
+	"github.com/cehbz/spacekit/internal/skylight"
 )
 
 func activeSpaceID() uint64 { return skylight.ActiveSpaceID() }

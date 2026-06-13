@@ -1,4 +1,4 @@
-# Build, sign, and install the mac-knob binaries.
+# Build, sign, and install the spacekit binaries.
 #
 # Accessibility/Screen Recording grants are bound to a binary's code
 # signature. Ad-hoc signatures change cdhash on every rebuild, which orphans
@@ -9,7 +9,7 @@
 # One-time setup: scripts/gen-signing-cert.sh, store the .p12 in 1Password
 # (see README "Stable signing").
 
-CODESIGN_IDENTITY ?= mac-knob
+CODESIGN_IDENTITY ?= spacekit
 PREFIX ?= $(HOME)/bin
 BINS := spaceswitch spacekeeper
 

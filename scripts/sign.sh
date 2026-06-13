@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sign the given binaries with the mac-knob self-signed identity, pulled from
+# Sign the given binaries with the spacekit self-signed identity, pulled from
 # 1Password into a throwaway keychain that is torn down on exit. Nothing
 # persistent is written to any keychain (login or otherwise).
 #
@@ -10,9 +10,9 @@
 # no cert), accepting that grants will not persist across rebuilds.
 set -euo pipefail
 
-IDENTITY="${CODESIGN_IDENTITY:-mac-knob}"
-P12_REF="${OP_P12_REF:-op://Private/mac-knob signing/p12}"
-P12PW_REF="${OP_P12PW_REF:-op://Private/mac-knob signing/p12password}"
+IDENTITY="${CODESIGN_IDENTITY:-spacekit}"
+P12_REF="${OP_P12_REF:-op://Private/spacekit signing/p12}"
+P12PW_REF="${OP_P12PW_REF:-op://Private/spacekit signing/p12password}"
 bins=("$@")
 
 adhoc() {

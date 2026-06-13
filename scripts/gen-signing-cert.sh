@@ -6,8 +6,8 @@
 # Requirement (identifier + cert leaf) stable, so TCC grants survive rebuilds.
 set -euo pipefail
 
-OUT="${1:-mac-knob-signing.p12}"
-CN="${CODESIGN_IDENTITY:-mac-knob}"
+OUT="${1:-spacekit-signing.p12}"
+CN="${CODESIGN_IDENTITY:-spacekit}"
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
@@ -31,13 +31,13 @@ Created $OUT  (CN=$CN, codeSigning, valid 10 years)
 
 Store in 1Password (adjust the vault), then remove the local file:
 
-  op item create --category 'API Credential' --title 'mac-knob signing' --vault Private \\
+  op item create --category 'API Credential' --title 'spacekit signing' --vault Private \\
     "p12[password]=\$(base64 < $OUT)" \\
     "p12password[password]=$p12pw"
   rm $OUT
 
 The Makefile reads these references (override OP_P12_REF / OP_P12PW_REF if you
 name things differently):
-  op://Private/mac-knob signing/p12
-  op://Private/mac-knob signing/p12password
+  op://Private/spacekit signing/p12
+  op://Private/spacekit signing/p12password
 EOF
