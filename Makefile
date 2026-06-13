@@ -33,6 +33,8 @@ sign: build
 install: sign
 	mkdir -p $(PREFIX)
 	for b in $(BINS); do cp $$b $(PREFIX)/$$b; done
+	@# Restart the daemon if loaded, so the running binary matches what was granted.
+	@launchctl kickstart -k gui/$$(id -u)/bz.ceh.spaceswitch 2>/dev/null && echo "restarted spaceswitch daemon" || true
 	@echo "installed to $(PREFIX)"
 
 test:

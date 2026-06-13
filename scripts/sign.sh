@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 # Sign the given binaries with the mac-knob self-signed identity, pulled from
 # 1Password into a throwaway keychain that is torn down on exit. Nothing
-# persistent is written to any keychain (login or otherwise). If the secret
-# or the 1Password CLI is unavailable, fall back to ad-hoc signing with a
-# stable identifier and warn (ad-hoc grants do not survive rebuilds).
+# persistent is written to any keychain (login or otherwise).
+#
+# If the cert is unavailable this FAILS rather than ad-hoc signing: an ad-hoc
+# binary's TCC grant is keyed to its cdhash, so silently installing one would
+# orphan the Accessibility grant for the spaceswitch daemon and re-prompt.
+# Set ALLOW_ADHOC=1 to opt into ad-hoc signing anyway (e.g. a fresh clone with
+# no cert), accepting that grants will not persist across rebuilds.
 set -euo pipefail
 
 IDENTITY="${CODESIGN_IDENTITY:-mac-knob}"
@@ -12,18 +16,30 @@ P12PW_REF="${OP_P12PW_REF:-op://Private/mac-knob signing/p12password}"
 bins=("$@")
 
 adhoc() {
-  echo "warning: ad-hoc signing — Accessibility/Screen Recording grants will NOT persist across rebuilds." >&2
+  echo "warning: ad-hoc signing (ALLOW_ADHOC) — TCC grants will NOT persist across rebuilds." >&2
   for b in "${bins[@]}"; do
     codesign --force --identifier "bz.ceh.$(basename "$b")" --sign - "$b"
   done
 }
 
+fail() {
+  echo "sign.sh: $1" >&2
+  echo "  Refusing to ad-hoc sign (would orphan the spaceswitch Accessibility grant)." >&2
+  echo "  Fix: 'op signin' (see README 'Stable signing'), or set ALLOW_ADHOC=1 to sign ad-hoc anyway." >&2
+  exit 1
+}
+
 if ! command -v op >/dev/null 2>&1; then
-  echo "1Password CLI (op) not found." >&2; adhoc; exit 0
+  [ "${ALLOW_ADHOC:-}" = "1" ] && { adhoc; exit 0; }
+  fail "1Password CLI (op) not found"
 fi
+
+# `op read` auto-prompts (Touch ID) when the 1Password desktop-app integration
+# is on, which is the normal case. If it fails, the integration is off / there
+# is no session — run `op signin` first, then retry.
 if ! p12_b64=$(op read "$P12_REF" 2>/dev/null); then
-  echo "signing secret not available ($P12_REF); run scripts/gen-signing-cert.sh and store it, or 'op signin'." >&2
-  adhoc; exit 0
+  [ "${ALLOW_ADHOC:-}" = "1" ] && { adhoc; exit 0; }
+  fail "could not read the signing cert ($P12_REF) — unlock 1Password or run 'op signin'"
 fi
 p12pw=$(op read "$P12PW_REF")
 
