@@ -91,13 +91,24 @@ Saves window-to-space assignments and moves windows back later, after a reboot o
 ```
 go build -o spacekeeper ./cmd/spacekeeper
 
-spacekeeper save              snapshot to ~/.config/spacekeeper/layout.json
-spacekeeper restore [-n]      move windows back to their spaces; -n prints the plan
+spacekeeper save              snapshot the current layout into history
+spacekeeper list              list snapshots, newest first
+spacekeeper restore [-n]      restore the high-water snapshot; -n prints the plan
+spacekeeper restore -latest   restore the newest snapshot instead
+spacekeeper restore -from ID  restore a specific snapshot (timestamp substring from `list`)
 spacekeeper restore -frames   also restore each window's position and size
 spacekeeper restore -create=false   skip recreating missing desktops
 spacekeeper restore -fullscreen   also re-fullscreen windows that were fullscreen
-spacekeeper show              print the saved layout
+spacekeeper show [-from ID]   print a snapshot's raw layout
 ```
+
+### Snapshot history
+
+`save` writes a timestamped snapshot under `~/.config/spacekeeper/snapshots/`, deduped (nothing is written when the layout is unchanged) and pruned to the last `-keep` (default 200). It captures everything, with no judgment about whether a state is "good" — so an accidental window-nuke, a disconnected monitor, or an update closing windows all get recorded, but none of them destroy earlier snapshots.
+
+`restore` defaults to the **high-water snapshot** — the richest retained arrangement, ranked transparently by display count, then window count, then recency. That is almost always the full layout you want back. The richest snapshot is also pinned so pruning never deletes it, even when it is old. If the high-water pick looks wrong, `list` shows every snapshot with descriptive facts only (timestamp, window count, spaces per display) so you choose, and `restore -from <id>` or `-latest` overrides.
+
+Run `save` periodically with the opt-in agent (`make save-agent-install`), so a good layout is always captured minutes before any reboot or outage. Because the agent stops at shutdown, an update closing windows during shutdown is never snapshotted — the newest snapshot stays the last good pre-reboot one.
 
 `-frames` repositions and resizes via the Accessibility API. It only affects windows on the **currently active space** — macOS won't let AX resize a window that lives on another space, so frame restore is partial unless you run it per-space. Space assignment (the default) has no such limit. Grant the running process Accessibility for `-frames` to do anything.
 
@@ -105,7 +116,7 @@ Restore at login is available as an opt-in agent (`make restore-agent-install` /
 
 The read side is SkyLight introspection (`SLSCopyManagedDisplaySpaces`, `SLSCopySpacesForWindows`), callable from any process. The write side is `SLSBridgedMoveWindowsToManagedSpaceOperation`, the bridged operation that works with SIP enabled since macOS 26.4. It is private and may vanish in any update; spacekeeper resolves it at runtime and reports clearly when it is unavailable. Verified working on macOS 26.5.
 
-Spaces are identified by UUID, with a (display, position) fallback when a UUID is gone. Window IDs do not survive reboots, so windows are re-matched by app, then title, then frame proximity. Grant Screen Recording to make titles visible; without it matching uses app and frame only.
+Spaces are identified by UUID, with a (display, position) fallback when a UUID is gone. Window IDs do not survive reboots, so windows are re-matched by app, then title, then frame proximity. Titles come from `kCGWindowName` (needs Screen Recording, covers all spaces) with an Accessibility fallback that covers the active space only; `save` triggers the Screen Recording request, since hand-adding a CLI to that list often does not bind. Without any titles, matching uses app and frame.
 
 If a display has fewer desktops than the saved layout (e.g. after a display was disconnected and reconnected), restore recreates the missing ones before moving windows. This is the one operation that drives Mission Control — it animates in and out, unavoidably, because there is no non-flashy, no-SIP way to create a Dock-managed space. It runs only when desktops are actually missing; disable with `-create=false`. Recreated desktops get new UUIDs, so windows resolve to them by display position.
 

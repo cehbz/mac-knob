@@ -5,6 +5,36 @@
 // others rely on; there is no public AXUIElement <-> CGWindowID bridge.
 extern AXError _AXUIElementGetWindow(AXUIElementRef element, CGWindowID *outID);
 
+// Window titles keyed by CGWindowID for one app, as a plist array of
+// {id, title} dicts. Reads AXTitle, which only needs Accessibility — unlike
+// CGWindowListCopyWindowInfo's kCGWindowName, which needs Screen Recording.
+CFDataRef sk_window_titles(int pid) {
+	AXUIElementRef app = AXUIElementCreateApplication((pid_t)pid);
+	if (!app) return NULL;
+	CFArrayRef windows = NULL;
+	if (AXUIElementCopyAttributeValue(app, kAXWindowsAttribute, (CFTypeRef *)&windows) != kAXErrorSuccess || !windows) {
+		CFRelease(app);
+		return NULL;
+	}
+	NSMutableArray *out = [NSMutableArray array];
+	for (CFIndex i = 0; i < CFArrayGetCount(windows); i++) {
+		AXUIElementRef w = (AXUIElementRef)CFArrayGetValueAtIndex(windows, i);
+		CGWindowID wid = 0;
+		if (_AXUIElementGetWindow(w, &wid) != kAXErrorSuccess || wid == 0) continue;
+		CFTypeRef t = NULL;
+		NSString *title = @"";
+		if (AXUIElementCopyAttributeValue(w, kAXTitleAttribute, &t) == kAXErrorSuccess && t) {
+			title = [NSString stringWithFormat:@"%@", (__bridge id)t];
+			CFRelease(t);
+		}
+		[out addObject:@{@"id": @(wid), @"title": title}];
+	}
+	CFRelease(windows);
+	CFRelease(app);
+	CFDataRef d = CFPropertyListCreateData(NULL, (__bridge CFTypeRef)out, kCFPropertyListXMLFormat_v1_0, 0, NULL);
+	return d;
+}
+
 // Move/resize the window with the given CGWindowID to the frame. The window is
 // found by walking the owning app's AX windows and matching CGWindowID, since
 // frames can only be set through the Accessibility API (CGWindow bounds are

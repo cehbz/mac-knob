@@ -19,7 +19,7 @@ BINS := spaceswitch spacekeeper
 
 export CODESIGN_IDENTITY OP_P12_REF OP_P12PW_REF
 
-.PHONY: all build sign install test clean restore-agent-install restore-agent-uninstall
+.PHONY: all build sign install test clean restore-agent-install restore-agent-uninstall save-agent-install save-agent-uninstall
 
 all: install
 
@@ -50,6 +50,19 @@ restore-agent-uninstall:
 	launchctl bootout gui/$$(id -u)/$(RESTORE_AGENT) 2>/dev/null || true
 	rm -f $(HOME)/Library/LaunchAgents/$(RESTORE_AGENT).plist
 	@echo "login restore disabled"
+
+# Optional agent that snapshots the layout into history every few minutes.
+SAVE_AGENT := bz.ceh.spacekeeper-save
+save-agent-install:
+	cp dist/$(SAVE_AGENT).plist $(HOME)/Library/LaunchAgents/$(SAVE_AGENT).plist
+	launchctl bootout gui/$$(id -u)/$(SAVE_AGENT) 2>/dev/null || true
+	launchctl bootstrap gui/$$(id -u) $(HOME)/Library/LaunchAgents/$(SAVE_AGENT).plist
+	@echo "periodic snapshots enabled"
+
+save-agent-uninstall:
+	launchctl bootout gui/$$(id -u)/$(SAVE_AGENT) 2>/dev/null || true
+	rm -f $(HOME)/Library/LaunchAgents/$(SAVE_AGENT).plist
+	@echo "periodic snapshots disabled"
 
 clean:
 	rm -f $(BINS)

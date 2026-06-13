@@ -12,6 +12,11 @@ package skylight
 #include <dlfcn.h>
 #include <stdlib.h>
 
+// Screen Recording access (CoreGraphics, 10.15+). kCGWindowName is only
+// populated for the caller's CGWindowListCopyWindowInfo when this is granted.
+extern bool CGPreflightScreenCaptureAccess(void);
+extern bool CGRequestScreenCaptureAccess(void);
+
 typedef int (*sk_conn_fn)(void);
 typedef unsigned long long (*sk_active_fn)(int);
 typedef CFArrayRef (*sk_copy_displays_fn)(int);
@@ -89,6 +94,7 @@ char *sk_bundle_id_for_pid(int pid);
 // Implemented in ax.m.
 int sk_set_window_frame(int pid, uint32_t wid, double x, double y, double w, double h);
 int sk_set_fullscreen(int pid, uint32_t wid, int on);
+CFDataRef sk_window_titles(int pid);
 // Implemented in spacecreate.m.
 int sk_add_spaces(const int *counts, int n, int *added);
 */
@@ -192,6 +198,34 @@ func WindowList() ([]WindowInfo, error) {
 		return nil, err
 	}
 	return wins, nil
+}
+
+// ScreenRecordingGranted reports whether this binary has Screen Recording
+// access, which CGWindowListCopyWindowInfo needs to return window titles.
+func ScreenRecordingGranted() bool { return bool(C.CGPreflightScreenCaptureAccess()) }
+
+// RequestScreenRecording registers the binary with TCC and prompts if access
+// is undetermined. Granting takes effect on the next process launch. Calling
+// this is how a CLI gets correctly listed; hand-adding it in System Settings
+// often does not bind.
+func RequestScreenRecording() bool { return bool(C.CGRequestScreenCaptureAccess()) }
+
+// WindowTitlesForPID returns an app's window titles keyed by CGWindowID, read
+// via Accessibility (no Screen Recording needed). Empty if AX is unavailable.
+func WindowTitlesForPID(pid int) map[uint32]string {
+	d := C.sk_window_titles(C.int(pid))
+	out := map[uint32]string{}
+	var entries []struct {
+		ID    uint64 `plist:"id"`
+		Title string `plist:"title"`
+	}
+	if decodeData(d, "AXTitle list", &entries) != nil {
+		return out
+	}
+	for _, e := range entries {
+		out[uint32(e.ID)] = e.Title
+	}
+	return out
 }
 
 // BundleIDForPID resolves a process's bundle identifier, "" if none.

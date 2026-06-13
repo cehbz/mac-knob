@@ -4,6 +4,7 @@
 package layout
 
 import (
+	"encoding/json"
 	"math"
 	"sort"
 	"time"
@@ -39,6 +40,76 @@ type Layout struct {
 	SavedAt time.Time     `json:"savedAt"`
 	Spaces  []SavedSpace  `json:"spaces"`
 	Windows []SavedWindow `json:"windows"`
+}
+
+// DisplaySpaces is the count of user desktops on one display.
+type DisplaySpaces struct {
+	DisplayUUID string
+	Spaces      int
+}
+
+// Stats summarizes a layout for listing and ranking.
+type Stats struct {
+	Windows  int
+	Displays []DisplaySpaces // in the layout's display order
+}
+
+func (s Stats) DisplayCount() int { return len(s.Displays) }
+
+// Stats counts windows and the spaces per display.
+func (l Layout) Stats() Stats {
+	perDisplay := map[string]int{}
+	var order []string
+	for _, sp := range l.Spaces {
+		if _, seen := perDisplay[sp.DisplayUUID]; !seen {
+			order = append(order, sp.DisplayUUID)
+		}
+		perDisplay[sp.DisplayUUID]++
+	}
+	st := Stats{Windows: len(l.Windows)}
+	for _, d := range order {
+		st.Displays = append(st.Displays, DisplaySpaces{DisplayUUID: d, Spaces: perDisplay[d]})
+	}
+	return st
+}
+
+// Richer reports whether a is a richer arrangement than b: more displays
+// first, then more windows, then more recent. This is a transparent ordering
+// used to pick the high-water-mark snapshot, never to gate what is saved.
+func Richer(a, b Layout) bool {
+	as, bs := a.Stats(), b.Stats()
+	if ad, bd := as.DisplayCount(), bs.DisplayCount(); ad != bd {
+		return ad > bd
+	}
+	if as.Windows != bs.Windows {
+		return as.Windows > bs.Windows
+	}
+	return a.SavedAt.After(b.SavedAt)
+}
+
+// Signature is a stable fingerprint of a layout's content (spaces and windows,
+// ignoring the timestamp), used to skip saving snapshots identical to the
+// previous one. Order-independent: equal arrangements produce equal signatures.
+func (l Layout) Signature() string {
+	spaces := append([]SavedSpace(nil), l.Spaces...)
+	sort.Slice(spaces, func(i, j int) bool {
+		if spaces[i].DisplayUUID != spaces[j].DisplayUUID {
+			return spaces[i].DisplayUUID < spaces[j].DisplayUUID
+		}
+		return spaces[i].Index < spaces[j].Index
+	})
+	windows := append([]SavedWindow(nil), l.Windows...)
+	sort.Slice(windows, func(i, j int) bool {
+		a, b := windows[i], windows[j]
+		ka := a.BundleID + "\x00" + a.OwnerName + "\x00" + a.Title + "\x00" + a.SpaceUUID
+		kb := b.BundleID + "\x00" + b.OwnerName + "\x00" + b.Title + "\x00" + b.SpaceUUID
+		return ka < kb
+	})
+	out, _ := json.Marshal(struct {
+		S []SavedSpace
+		W []SavedWindow
+	}{spaces, windows})
+	return string(out)
 }
 
 // LiveWindow is a window present right now (CGWindowIDs are session-scoped,
